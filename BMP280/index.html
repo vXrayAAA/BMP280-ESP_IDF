@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard BMP280</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .chart-container {
+            position: relative;
+            margin: auto;
+            height: 300px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .current-values {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .value-box {
+            text-align: center;
+            padding: 10px;
+            background-color: #e9e9e9;
+            border-radius: 5px;
+        }
+        .value-box h2 {
+            margin: 0;
+            font-size: 1.2em;
+            color: #555;
+        }
+        .value-box p {
+            margin: 5px 0 0;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard BMP280</h1>
+        <div class="current-values">
+            <div class="value-box">
+                <h2>Temperatura</h2>
+                <p id="currentTemp">-- °C</p>
+            </div>
+            <div class="value-box">
+                <h2>Pressão</h2>
+                <p id="currentPressure">-- hPa</p>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="tempChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="pressureChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const tempCtx = document.getElementById('tempChart').getContext('2d');
+        const pressureCtx = document.getElementById('pressureChart').getContext('2d');
+        const maxDataPoints = 20;
+
+        const tempChart = new Chart(tempCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Temperatura (°C)',
+                    data: [],
+                    borderColor: 'rgb(255, 99, 132)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        const pressureChart = new Chart(pressureCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Pressão (hPa)',
+                    data: [],
+                    borderColor: 'rgb(54, 162, 235)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        function addData(chart, label, data) {
+            chart.data.labels.push(label);
+            chart.data.datasets.forEach((dataset) => {
+                dataset.data.push(data);
+            });
+            if (chart.data.labels.length > maxDataPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.update();
+        }
+
+        // Conectar ao WebSocket
+        const socket = new WebSocket('ws://' + window.location.hostname + '/ws');
+
+        socket.onopen = function(e) {
+            console.log("Conexão estabelecida");
+        };
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            const now = new Date().toLocaleTimeString();
+
+            // Converter temperatura bruta para Celsius (exemplo simples)
+            const tempCelsius = (data.temperature / 100).toFixed(2);
+            // Converter pressão bruta para hPa (exemplo simples)
+            const pressureHpa = (data.pressure / 100).toFixed(2);
+
+            document.getElementById('currentTemp').textContent = tempCelsius + ' °C';
+            document.getElementById('currentPressure').textContent = pressureHpa + ' hPa';
+
+            addData(tempChart, now, tempCelsius);
+            addData(pressureChart, now, pressureHpa);
+        };
+
+        socket.onclose = function(event) {
+            if (event.wasClean) {
+                console.log(`Conexão fechada limpa, código=${event.code} motivo=${event.reason}`);
+            } else {
+                console.log('Conexão morreu');
+            }
+        };
+
+        socket.onerror = function(error) {
+            console.log(`Erro ${error.message}`);
+        };
+    </script>
+</body>
+</html>
